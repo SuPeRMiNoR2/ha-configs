@@ -17,7 +17,7 @@ blueprint:
      - Alternate off scene based on time of day (optional)
      
   domain: automation
-  source_url: https://github.com/SuPeRMiNoR2/ha-configs
+  source_url: https://github.com/SuPeRMiNoR2/ha-configs/blob/main/blueprints/motion-lights.yaml
   input:
     motion_entity:
       name: Motion Sensor
