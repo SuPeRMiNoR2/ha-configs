@@ -1,7 +1,7 @@
 blueprint:
   name: Motion Lights Blueprint
   description: >
-    Motion Lights v1
+    Motion Lights v1.2 (Now with working automations!)
 
     
     Activates scene when motion is detected and activates scene when motion clears. 
@@ -10,12 +10,6 @@ blueprint:
 
     This can allow you to have a scene that turns off the lights during the day and a scene that leaves the lights on dim during the night, or something similar to that.  
     
-
-    Features:
-     - Trigger scene on motion
-     - Wait time for triggering no motion scene
-     - Alternate off scene based on time of day (optional)
-     
   domain: automation
   source_url: https://github.com/SuPeRMiNoR2/ha-configs/blob/main/blueprints/motion-lights.yaml
   input:
@@ -54,13 +48,13 @@ blueprint:
           domain: scene
     time_scene_alternate_start:
       name: Alternate scene time frame start (Optional)
-      description: Time the alernate scene becomes effective
+      description: Time the alternate scene becomes effective
       default: "00:00:00"
       selector:
         time:
     time_scene_alternate_end:
       name: Alternate scene time frame end (Optional)
-      description: Time the alernate scene is no longer effective
+      description: Time the alternate scene is no longer effective
       default: "00:00:00"
       selector:
         time:
@@ -69,39 +63,37 @@ blueprint:
 mode: restart
 max_exceeded: silent
 
+#Declare variables (needed for template condition)
+variables:
+  scene_alternate: !input scene_alternate
+
 trigger:
   - platform: state
     entity_id: !input motion_entity
     from: "off"
     to: "on"
-  - platform: state
-    entity_id: !input motion_entity
-    from: "on"
-    to: "off"
-    for: !input no_motion_wait
       
 action:
-  - choose:
-      # Trigger to state == "on"
+  #Turn on "on" scene
+  - scene: !input scene_on
+  #Wait for motion source to go to "off"
+  - wait_for_trigger:
+      platform: state
+      entity_id: !input motion_entity
+      from: "on"
+      to: "off"
+  #Wait the delay amount, if motion is detected again the script will restart from the beginning
+  - delay: !input no_motion_wait
+  #Pick what scene to use to shut off
+  - choose:   
+      # Used if ambient scene is during the active time frame and a scene is picked
       - conditions:
-          - condition: template
-            value_template: "{{ trigger.to_state.state == 'on' }}" 
+          - "{{ scene_alternate != 'scene.none' }}"
+          - condition: time
+            after: !input time_scene_alternate_start
+            before: !input time_scene_alternate_end
         sequence:
-          - scene: !input scene_on
-      # Trigger to state = "off"
-      - conditions:
-          - condition: template
-            value_template: "{{ trigger.to_state.state == 'off' }}"
-        sequence:          
-          - choose:
-              # Used if ambient scene is during the active time frame and a scene is picked
-              - conditions:
-                  - "{{ scene_ambient != 'scene.none' }}"
-                  - condition: time
-                    after: !input time_scene_alternate_start
-                    before: !input time_scene_alternate_end
-                sequence:
-                  - scene: !input scene_alternate
-            # Otherwise, activate normal no motion scene
-            default:
-              - scene: !input scene_off
+          - scene: !input scene_alternate
+    # Otherwise, activate normal no motion scene
+    default:
+      - scene: !input scene_off
