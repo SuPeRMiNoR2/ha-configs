@@ -1,5 +1,4 @@
 import hassapi as hass
-import helpers
 
 version = "2022-01-07"
 
@@ -39,12 +38,12 @@ class MotionLights(hass.Hass):
             self.delay = 300 # 5 Minutes
 
         if "brightness_on" in self.args:
-            self.brightness_on = helpers.brightness_up(self.args["brightness_on"])
+            self.brightness_on = brightness_up(self.args["brightness_on"])
         else:
             self.brightness_on = False
         
         if "brightness_off" in self.args:
-            self.brightness_off = helpers.brightness_up(self.args["brightness_off"])
+            self.brightness_off = brightness_up(self.args["brightness_off"])
         else:
             self.brightness_off = False
 
@@ -190,4 +189,11 @@ class MotionLights(hass.Hass):
         if self.handle != None:
             self.cancel_timer(self.handle)
         self.handle = self.run_in(self.timer_callback, self.delay)
+
+
+def brightness_up(brightness):
+    # Takes 0 - 100 range and maps it to 0 - 255
+    # turn_on service takes 0-255 in brightness=
+    normal = round(int(float(brightness)) * 255 / 100)
+    return normal
         
