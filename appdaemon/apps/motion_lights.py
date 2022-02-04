@@ -1,7 +1,8 @@
 import hassapi as hass
 
-version = "2022-01-07"
+version = "2022-02-04"
 
+# Motion Lights
 # App to Automatically control lights based on motion or other activity
 #
 # Args:
@@ -25,6 +26,8 @@ version = "2022-01-07"
 # condition: Entity that needs to be on for automations to run.
 # off_modifier: When this entity is on, brightness_off is the off mode, when this entity is off 
 #   brightness_off will be ignored and the light will actually turn off. This allows you to have different behaviors during certain conditions
+#
+#
 
 class MotionLights(hass.Hass):
     def initialize(self):
@@ -151,13 +154,16 @@ class MotionLights(hass.Hass):
     def light_on(self):
         # Turns on light, if brightness_on is defined turns on light to brightness
         # This section won't run unless the condition allows for it
-       
-        if self.brightness_on:
-            self.log("Turning {0} on to brightness {1} and restarting timer".format(self.entity_on, self.brightness_on))
-            self.turn_on(self.entity_on, brightness=self.brightness_on)
-        else:
-            self.log("Turning {0} on and restarting timer".format(self.entity_on))
-            self.turn_on(self.entity_on)
+
+        if self.handle: # If there is an active timer
+            self.log("Extending timer")
+        else: # If there isn't an active timer
+            if self.brightness_on:
+                self.log("Turning {0} on to brightness {1} and restarting timer".format(self.entity_on, self.brightness_on))
+                self.turn_on(self.entity_on, brightness=self.brightness_on)
+            else:
+                self.log("Turning {0} on and restarting timer".format(self.entity_on))
+                self.turn_on(self.entity_on)
        
         # Restart off timers
         self.restart_timer()
@@ -196,4 +202,196 @@ def brightness_up(brightness):
     # turn_on service takes 0-255 in brightness=
     normal = round(int(float(brightness)) * 255 / 100)
     return normal
+
+# Room Lights
+#
+# App that automatically turns on and off room lights based on presence. Supports sensors that have an "on" state when presence has been detected
+# When motion is trigged it tries to find a scene for that room matching the current light mode
+# If it can't find a matching scene it turns on the light entities that it knows about for that room to their current brightness
+# When motion is cleared it shuts off all the light entities it knows about
+# It discovers light entities by looking at the scenes it did find for that room and extracting their light entities
+# If you want a rooms lights to be off regardless of motion at night have a "night" light mode and scene or turn off the automation condition at night
+# If you want a room to do something other than have the lights turned off when motion ends, create a "off" scene
+#
+#
+# Args:
+#
+# Required:
+#   sensor: # A list of trigger to trigger room activity. Only motion supported for now
+#   - sensor1
+#   - sensor2
+#   roomprefix: 
+#   lightmodeselect:
+#
+# 
+# Optional:
+#   delay: #Delay in minutes. Defaults to 30 minutes, delay to shut of lights after no room activity
+#   condition: #Entity that must be on for automation overrides to take place
+#   debug: #Adds extra logging
+
+class RoomLights(hass.Hass):
+    def initialize(self):
+        # Create a variable to store the timer handle
+        self.timer_handle = None 
+        self.scene_map = {} #stores mapping of light mode name to scene entity
+        self.all_light_entities = [] #Stores discovered list of all lights referenced in any scenes. Used to shut lights off
+        self.debug = False
+
+        # Check if debug logging is enabled
+        if "debug" in self.args:
+            self.debug = True
+            self.log("Debug logging enabled")
+
+        # Check if room prefix is defined
+        if "roomprefix" in self.args:
+            self.roomprefix = self.args["roomprefix"]
+            self.sceneprefix = "scene." + self.roomprefix + "_"
+            self.debuglog("Generated scene prefix: "+self.sceneprefix)
+        else:
+            self.error("No Room Prefix Defined, Please edit your app configuration")
+
+        hastate = self.get_state() #Get Device List from HA
+        for e in hastate: 
+            if self.sceneprefix in e: #Find scenes matching name of room
+                lightmode = e.replace(self.sceneprefix, "") 
+                self.scene_map[lightmode] = e
+                for light in hastate[e]["attributes"]["entity_id"]: #Find light entities in scene and add to list
+                    if not light in self.all_light_entities:
+                        self.all_light_entities.append(light)
+
+        self.debuglog("Detected Scenes: {0}".format(self.scene_map))
+        self.debuglog("Detected Lights: {0}".format(self.all_light_entities))
+
+        if "lightmodeselect" in self.args:
+            self.lightmodeselect = self.args["lightmodeselect"]
+            self.listen_state(self.lightmode_callback, self.lightmodeselect)
+        else:
+            self.error("lightmodeselect not defined, please edit app configuration")
+
+        # Verify light mode select entity. Checks if scenes were found for each
+        selectdata = hastate[self.lightmodeselect]
+        for mode in selectdata["attributes"]["options"]:
+            name = mode.lower()
+            if not name in self.scene_map:
+                self.debuglog("Warning, can't find scene for light select mode: "+mode)
+
+        # Check for delay, and set default if needed
+        if "delay" in self.args:
+            self.delay = 60 * int(self.args["delay"]) #Delay is defined in seconds in the config but appd uses seconds internally, convert to seconds before storing
+        else:
+            self.delay = 60 * 30 # 30 Minutes
+
+        # Check if sensor entity or sensor entity list is defined
+        if "sensor" in self.args:
+            sensor = self.args["sensor"]
+            if type(sensor) == str:
+                # Single entity
+                self.listen_state(self.motion_callback, self.args["sensor"])
+            elif type(sensor) == list:
+                for entity in sensor:
+                    self.listen_state(self.motion_callback, entity)
+        else:
+            self.error("No sensor specified. Please edit your app configuration")
+
+        # Check for condition entity, subscribe and set variable
+        if "condition" in self.args:
+            self.condition_entity = self.args["condition"]
+        else:
+            self.condition_entity = False
+
+        # Check if any lights are on right now and schedule timer if that is the case
+        active = False
+        for light in self.all_light_entities:
+            if self.get_state(light) == "on":
+                active = True
+        if active == True:
+            self.log("Detected some lights that are on currently, scheduled shutdown for {0} seconds".format(self.delay))
+            self.restart_timer()
+
+    def terminate(self):
+        if self.timer_handle != None:
+            self.cancel_timer(self.timer_handle)
+    
+    def debuglog(self, message):
+        if self.debug:
+            self.log(message)
+
+    def motion_callback(self, entity, attribute, old, new, kwargs):
+        if self.condition_entity:
+            automation_allowed = self.get_state(self.condition_entity)
+        else:
+            automation_allowed = "on"
+
+        if (old == "off" and new == "on") and automation_allowed == "on":
+            self.log("Triggered by state of {0}".format(entity))
+            self.lights_on()
+    
+    def lightmode_callback(self, entity, attribute, old, new, kwargs):
+        if self.check_automation_allowed():
+            self.lights_update()
+    
+    def check_automation_allowed(self):
+        if self.condition_entity:
+            automation_allowed = self.get_state(self.condition_entity)
+        else:
+            automation_allowed = "on"
+        if automation_allowed == "on":
+            return True
+        else:
+            return False
+
+    def timer_callback(self, kwargs):
+        # Receives timer events
+        self.timer_handle = None 
+        if self.condition_entity:
+            automation_allowed = self.get_state(self.condition_entity)
+        else:
+            automation_allowed = "on"
+
+        if automation_allowed == "on":
+            self.lights_off()    
+
+    def lights_update(self):
+        # Light mode changed, if light timer is active, update scene
+
+        lightmode = self.get_state(self.lightmodeselect).lower() #Get current light mode state
+        if lightmode in self.scene_map and self.timer_handle:
+            scene = self.scene_map[lightmode]
+            self.turn_on(scene)
+            self.log("Updated scene to "+scene)
+
+            
+    def lights_on(self):
+        # Turn on room lights because of motion
+
+        lightmode = self.get_state(self.lightmodeselect).lower() #Get current light mode state
+
+        if lightmode in self.scene_map:
+            scene = self.scene_map[lightmode]
+            self.turn_on(scene)
+            self.log("Activating Scene: "+scene)
+        else:
+            #There was no matching scene for the current light mode, turn on all lights to the last brightness as a backup
+            for light in self.all_light_entities:
+                self.turn_off(light)
+            self.log("No matching scene for mode {0}, turned on all lights to last brightness as a backup")
+       
+        # Restart off timers
+        self.restart_timer()
+
+    def lights_off(self):
+        #Turns off lights after motion delay
+        if "off" in self.scene_map: #If there is an "off" scene defined, activate it
+            self.turn_on(self.scene_map["off"])
+            self.log("Activating Scene: "+self.scene_map["off"])
+        else: #Otherwise, turn off all known light entitites
+            for light in self.all_light_entities:
+                self.turn_off(light)
+            self.log("Couldn't find 'off' scene. Turned off all lights instead")
+
+    def restart_timer(self):
+        if self.timer_handle != None:
+            self.cancel_timer(self.timer_handle)
+        self.timer_handle = self.run_in(self.timer_callback, self.delay)
         
+ 
