@@ -32,8 +32,6 @@ class ASM(hass.Hass):
         self.debug = False
         # Init state variables and entities
         self.arm_target_entity = self.args["arm_target"]
-        self.alarm_state_entity = self.args["alarm_state"]
-        self.arm_state_entity = self.args["arm_state"]
         self.notify_target = self.args["notify_target"]
 
         # Check if debug logging is enabled
@@ -46,7 +44,10 @@ class ASM(hass.Hass):
         if "name" in self.args:
             self.system_name = self.args["name"]
         else:
-            self.system_name = "ASM"
+            self.system_name = "ASM" # Pick default name
+
+        self.alarm_state_entity = "binary_sensor.{0}_alarm_state".format(self.system_name.lower())
+        self.arm_state_entity = "sensor.{0}_arming_state".format(self.system_name.lower())
         
         # Parse ignored sensor list
         if "ignored_sensors" in self.args:
