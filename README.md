@@ -7,6 +7,6 @@ I don't use blueprints much anymore, but I left the one that I used just in case
 ## AppDaemon Scripts
 [AppDaemon Page](appdaemon/)
 
-## HomeAssistant BluePrints
+## HomeAssistant Blueprints
 [Blueprints](blueprints/)
 
