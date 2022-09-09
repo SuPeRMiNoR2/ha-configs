@@ -46,6 +46,12 @@ class ASM(hass.Hass):
         else:
             self.system_name = "ASM" # Pick default name
 
+        # Initialize water shutoff if configured
+        if "water_shutoff" in self.args:
+            self.water_shutoff_entity = self.args["water_shutoff"]
+        else:
+            self.water_shutoff_entity = False
+
         self.alarm_state_entity = "binary_sensor.{0}_alarm_state".format(self.system_name.lower())
         self.arm_state_entity = "sensor.{0}_arming_state".format(self.system_name.lower())
         
@@ -108,9 +114,25 @@ class ASM(hass.Hass):
         if new == "on":
             msg = "Triggered: {0}".format(friendly_name)
             self.send_notification(msg, type="Water Alarm")
+            if self.water_shutoff_entity:
+                self.handle_water_valve_start(entity)
         if old == "on" and new == "off":
             msg = "Cleared: {0}".format(friendly_name)
             self.send_notification(msg, type="Water Alert")
+    
+    def handle_water_valve_start(self, triggerentity):
+        self.send_notification("Scheduling water shutoff in 1 minute in response to water alarm", type="Automatic Shutoff")
+        self.shutoff_timer = self.run_in(self.handle_water_valve_finish, 60, triggerentity=triggerentity)
+
+    def handle_water_valve_finish(self, kwargs):
+        # Check if leak alarm is still active
+        leakstate = self.get_state(kwargs['triggerentity'])
+        if leakstate == "on":
+            self.send_notification("Shutting off water now", type="Automatic Shutoff")
+            self.turn_off(self.water_shutoff_entity)
+        else:
+            self.send_notification("Leak Sensor is no longer active, leaving water on", type="Automatic Shutoff")
+
 
     def tamper_callback(self, entity, attribute, old, new, kwargs):
         friendly_name = self.tamper_sensors[entity]["friendly_name"]
