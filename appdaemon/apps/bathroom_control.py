@@ -4,25 +4,33 @@ from datetime import datetime
 
 __version__ = "2022-08-10"
 
+#
+# source: https://github.com/SuPeRMiNoR2/ha-configs/blob/main/appdaemon/apps/bathroom_control.py
+#
 # App to Automatically control bathroom fans
 #
+# --------------------------------------------
 # Args:
 # 
-# Required:
+#   Required:
+#     light: light switch entity
+#     fan: fan switch entity
 #
-# light: light switch entity
-# fan: fan switch entity
-#
-# Optional:
-#
-# delay: amount of time in seconds to wait to turn off bathroom fan. If not specified defaults to 600 seconds (10 Minutes)
-# humidity: Humidity sensor entity
-# motion: Motion sensor entity
-# presence: Presence sensor (Will not turn on fan unless this is set to "home")
-# halogging: (Enable Logging to HA Entity)
+#   Optional:
+#     delay: amount of time in seconds to wait to turn off bathroom fan. If not specified defaults to 600 seconds (10 Minutes)
+#     humidity: Humidity sensor entity
+#     motion: Motion sensor entity
+#     presence: Presence sensor (Will not turn on fan unless this is set to "home")
+#     halogging: (Enable Logging to HA Entity)
 
 class bathroom_fan_control(hass.Hass):
     def initialize(self):
+        required = ["light", "fan"]
+        for a in required:
+            if not a in self.args:
+                self.log("Error loading, required argument '{0}' not defined".format(a))
+                return
+            
         # Create a variable to store the timer handle
         self.timer_handle = None
         self.backup_timer = None
@@ -39,15 +47,8 @@ class bathroom_fan_control(hass.Hass):
         else:
             self.delay = 600 # Default to 10 Minutes
 
-        if "light" in self.args:
-            self.light = self.args["light"]
-        else:
-            self.error("No light entity specfied")
-
-        if "fan" in self.args:
-            self.fan = self.args["fan"]
-        else:
-            self.error("No fan entity specfied")
+        self.light = self.args["light"]
+        self.fan = self.args["fan"]
         
         if "humidity" in self.args:
             self.humidity_entity = self.args["humidity"]
