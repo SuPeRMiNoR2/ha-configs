@@ -2,7 +2,7 @@ import hassapi as hass
 import collections
 from datetime import datetime
 
-__version__ = "2022-08-10"
+__version__ = "2022-09-09"
 
 #
 # source: https://github.com/SuPeRMiNoR2/ha-configs/blob/main/appdaemon/apps/bathroom_control.py
@@ -144,7 +144,7 @@ class bathroom_fan_control(hass.Hass):
 
     def timer_callback(self, kwargs):
         self.timer_handle = None
-        self.log("Turning off fan from main timer")
+        self.halog("Turning off fan from main timer")
         if self.backup_timer: #Cancel the backup timer regardless
             self.cancel_timer(self.backup_timer)
             self.backup_timer = None
