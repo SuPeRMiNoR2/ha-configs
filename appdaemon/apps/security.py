@@ -1,7 +1,7 @@
 import hassapi as hass
 import datetime
 
-__version__ = "2022-02-03"
+__version__ = "2022-09-09"
 
 # Source: 
 #
@@ -13,8 +13,6 @@ __version__ = "2022-02-03"
 #
 # Required:
 # arm_target - Entity id of helper to select arming state from HA (input_select helper)
-# arm_state - Entity ID HSM will create to indicate arm state (sensor)
-# alarm_state - Entity ID HSM will create to indicate alarm state (binary_sensor)
 # notify_target - Entity ID to send security notifications to
 #
 # Optional:
@@ -23,23 +21,26 @@ __version__ = "2022-02-03"
 #  -
 #  -
 # debug: #Enable debug logging
-#
-# TODO
-# Tamper Detection
 
 class ASM(hass.Hass):
     def initialize(self):
-        self.debug = False
-        # Init state variables and entities
-        self.arm_target_entity = self.args["arm_target"]
-        self.notify_target = self.args["notify_target"]
+        required = ["arm_target", "notify_target"]
+        for a in required:
+            if not a in self.args:
+                self.log("Error loading, required argument '{0}' not defined".format(a))
+                return
 
-        # Check if debug logging is enabled
         if "debug" in self.args:
             self.debug = True
             self.debuglog("Debug logging enabled")
+        else:
+            self.debug = False
 
         self.debuglog("Version: "+__version__)
+
+        # Init state variables and entities
+        self.arm_target_entity = self.args["arm_target"]
+        self.notify_target = self.args["notify_target"]
 
         if "name" in self.args:
             self.system_name = self.args["name"]
@@ -105,7 +106,7 @@ class ASM(hass.Hass):
 
         self.listen_state(self.arm_target_callback, entity_id=self.arm_target_entity)
 
-         # Init Arm and Alarm States
+        # Init Arm and Alarm States
         self.update_alarm_state("off")
         self.update_arm_state(self.get_state(self.arm_target_entity)) # Set arm state to what the arm target state currently is
 
