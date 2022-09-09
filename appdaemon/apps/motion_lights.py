@@ -1,6 +1,6 @@
 import hassapi as hass
 
-version = "2022-02-04"
+__version__ = "2022-02-04"
 
 # Motion Lights
 # App to Automatically control lights based on motion or other activity
@@ -137,15 +137,19 @@ class MotionLights(hass.Hass):
             current_state = self.get_state(self.entity_on)
             current_brightness = self.get_state(self.entity_on, attribute="brightness")
             if (current_state == "on"):
-                # Check if the numbers are within 2 of each other (to avoid conversion issues)
-                if (abs(current_brightness - self.brightness_off) <= 2):
-                    self.log("Turned off because condition just turned off while at the brightness_off value".format(self.entity_on))
-                    self.turn_off(self.entity_off) 
-                else:
-                    self.log("Restarted timer because condition turned off, while the light is on ({0}) (But not at the brightness_off value {1}".format(current_brightness, self.brightness_off))
+                if self.brightness_off == False: #If brightness isn't defined
+                    self.log("Restarted timer because condition turned off while the light is on")
                     self.restart_timer()
-            
 
+                else: #If brightness is defined
+                    # Check if the numbers are within 2 of each other (to avoid conversion issues)
+                    if (abs(current_brightness - self.brightness_off) <= 2):
+                        self.log("Turned off because condition just turned off while at the brightness_off value".format(self.entity_on))
+                        self.turn_off(self.entity_off) 
+                    else:
+                        self.log("Restarted timer because condition turned off, while the light is on ({0}) (But not at the brightness_off value {1}".format(current_brightness, self.brightness_off))
+                        self.restart_timer()
+            
     def timer_callback(self, kwargs):
         # Receives timer events
         self.handle = None 
@@ -210,7 +214,7 @@ def brightness_up(brightness):
 # If it can't find a matching scene it turns on the light entities that it knows about for that room to their current brightness
 # When motion is cleared it shuts off all the light entities it knows about
 # It discovers light entities by looking at the scenes it did find for that room and extracting their light entities
-# If you want a rooms lights to be off regardless of motion at night have a "night" light mode and scene or turn off the automation condition at night
+# If you want a rooms lights to be off regardless of motion at night have a "night" light mode and scene with all lights off or turn off the automation condition at night
 # If you want a room to do something other than have the lights turned off when motion ends, create a "off" scene
 #
 #
@@ -295,7 +299,10 @@ class RoomLights(hass.Hass):
 
         # Check for condition entity, subscribe and set variable
         if "condition" in self.args:
-            self.condition_entity = self.args["condition"]
+            centity = self.args["condition"]
+            self.debuglog("Using condition: "+centity)
+            self.condition_entity = centity
+            self.listen_state(self.condition_callback, centity) 
         else:
             self.condition_entity = False
 
@@ -326,6 +333,13 @@ class RoomLights(hass.Hass):
             self.log("Triggered by state of {0}".format(entity))
             self.lights_on()
     
+    def condition_callback(self, entity, attribute, old, new, kwargs):
+        #Condition turned on, update lights
+        if old == "off" and new == "on":
+            self.lights_update()
+
+        #For now doesn't do anything if the condition turned off other than block the light turning on again
+    
     def lightmode_callback(self, entity, attribute, old, new, kwargs):
         if self.check_automation_allowed():
             self.lights_update()
@@ -352,13 +366,19 @@ class RoomLights(hass.Hass):
             self.lights_off()    
 
     def lights_update(self):
-        # Light mode changed, if light timer is active, update scene
+        # Light mode changed, if light timer is active, update scene.
 
         lightmode = self.get_state(self.lightmodeselect).lower() #Get current light mode state
         if lightmode in self.scene_map and self.timer_handle:
             scene = self.scene_map[lightmode]
             self.turn_on(scene)
-            self.log("Updated scene to "+scene)
+            self.debuglog("Updated scene to "+scene)
+
+        # If light timer isn't active, set light to off mode if it exists
+
+        if not self.timer_handle:
+            self.debuglog("Turning off lights since there is no active timer")
+            self.lights_off()
 
             
     def lights_on(self):
@@ -373,7 +393,7 @@ class RoomLights(hass.Hass):
         else:
             #There was no matching scene for the current light mode, turn on all lights to the last brightness as a backup
             for light in self.all_light_entities:
-                self.turn_off(light)
+                self.turn_on(light)
             self.log("No matching scene for mode {0}, turned on all lights to last brightness as a backup")
        
         # Restart off timers
