@@ -1,7 +1,7 @@
 import hassapi as hass
 import datetime
 
-__version__ = "2022-09-09"
+__version__ = "2022-09-23"
 
 # Source: 
 #
@@ -50,6 +50,7 @@ class ASM(hass.Hass):
         # Initialize water shutoff if configured
         if "water_shutoff" in self.args:
             self.water_shutoff_entity = self.args["water_shutoff"]
+            self.listen_state(self.valve_state_callback, entity_id=self.water_shutoff_entity)
         else:
             self.water_shutoff_entity = False
 
@@ -121,6 +122,18 @@ class ASM(hass.Hass):
             msg = "Cleared: {0}".format(friendly_name)
             self.send_notification(msg, type="Water Alert")
     
+    def valve_state_callback(self, entity, attribute, old, new, kwargs):
+        wentity = self.water_shutoff_entity
+
+        # Send a warning if the water valve looses connection
+        if new == "unavailable":
+            msg = "Water Valve {0} is now unavailable".format(self.water_shutoff_entity)
+            self.send_notification(msg, type="System Monitoring")
+        
+        if old == "unavailable" and (new == "on" or new == "off"):
+            msg = "Water Valve {0} no longer unavailable, now {1}".format(self.water_shutoff_entity, new)
+            self.send_notification(msg, type="System Monitoring")
+    
     def handle_water_valve_start(self, triggerentity):
         self.send_notification("Scheduling water shutoff in 1 minute in response to water alarm", type="Automatic Shutoff")
         self.shutoff_timer = self.run_in(self.handle_water_valve_finish, 60, triggerentity=triggerentity)
@@ -173,6 +186,9 @@ class ASM(hass.Hass):
             icon = "mdi:check-underline-circle-outline"
         elif new == "on":
             icon = "mdi:home-alert-outline"
+        else:
+            self.warning("update_alarm_state called with invalid state")
+            return
 
         attributes = {"source": "AppDaemon: security.py", "icon": icon, "friendly_name": self.system_name + " Alarm State", "device_class": "safety"} 
         self.alarm_state = new
