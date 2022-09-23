@@ -3,8 +3,7 @@ import datetime
 
 __version__ = "2022-09-09"
 
-# Some parts based on: https://raw.githubusercontent.com/AppDaemon/appdaemon/dev/conf/example_apps/battery.py
-
+# Original Source: https://raw.githubusercontent.com/AppDaemon/appdaemon/dev/conf/example_apps/battery.py
 # App to send warnings for devices running low on battery
 #
 # Args:
