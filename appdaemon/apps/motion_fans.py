@@ -154,9 +154,9 @@ class MotionFan(hass.Hass):
                 return(pmap["high"])
             elif temp > 72:
                 return(pmap["medium"])
-            elif temp > 64:
+            elif temp > 65:
                 return(pmap["low"])
-            elif temp <= 62:
+            else:
                 return(pmap["off"])
 
         # Slightly less aggressive cooling
@@ -165,9 +165,9 @@ class MotionFan(hass.Hass):
                 return(pmap["high"])
             elif temp > 72:
                 return(pmap["medium"])
-            elif temp > 64:
+            elif temp > 65:
                 return(pmap["low"])
-            elif temp <= 62:
+            else:
                 return(pmap["off"])
 
 
