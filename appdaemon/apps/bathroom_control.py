@@ -2,7 +2,7 @@ import hassapi as hass
 import collections
 from datetime import datetime
 
-__version__ = "2022-09-09"
+__version__ = "2022-12-11"
 
 #
 # source: https://github.com/SuPeRMiNoR2/ha-configs/blob/main/appdaemon/apps/bathroom_control.py
@@ -19,7 +19,6 @@ __version__ = "2022-09-09"
 #   Optional:
 #     delay: amount of time in seconds to wait to turn off bathroom fan. If not specified defaults to 600 seconds (10 Minutes)
 #     humidity: Humidity sensor entity
-#     motion: Motion sensor entity
 #     presence: Presence sensor (Will not turn on fan unless this is set to "home")
 #     halogging: (Enable Logging to HA Entity)
 
@@ -32,9 +31,8 @@ class bathroom_fan_control(hass.Hass):
                 return
             
         # Create a variable to store the timer handle
-        self.timer_handle = None
-        self.backup_timer = None
-        self.motion_timer_handle = None
+        self.timer_handle = None # Main timer
+        self.backup_timer = None # Backup timer
         
         if "halogging" in self.args:
             self.halogging = True
@@ -64,14 +62,6 @@ class bathroom_fan_control(hass.Hass):
             self.log("Found presence sensor, will not turn on fan unless presence sensor is on")
         else:
             self.presence_entity = False
-
-        if "motion" in self.args:
-            self.motion = self.args["motion"]
-            self.log("Found motion sensor, will use for fan shutoff in addition to light switch")
-            self.listen_state(self.motion_callback, entity_id=self.motion)
-        else:
-            self.motion = False
-            self.log("No motion sensor found, the fan will trigger shutdown when the light turns off or the backup timer expires") 
 
         self.listen_state(self.light_callback, entity_id=self.light)
         self.listen_state(self.fan_callback, entity_id=self.fan)
@@ -119,18 +109,6 @@ class bathroom_fan_control(hass.Hass):
                 # The light switch just went on, cancel all timers so that nothing weird happens to the person who just entered
                 self.cancel_normal()
                 self.restart_backup()
-                self.cancel_motion()
-
-    def motion_callback(self, entity, attribute, old, new, kwargs):
-        if self.get_state(self.fan) == "on": # Only do anything if the fan is actually on
-            if new == "off" and old == "on": # If motion ends, start motion timer
-                self.restart_motion() 
-                # After motion timer is over, normal fan timer will be started
-            
-            if new == "on" and old == "off": # If motion starts, cancel motion timer and normal timer and extend fan backup timer
-                self.cancel_motion()
-                self.cancel_normal()
-                self.restart_backup()
 
     def fan_callback(self, entity, attribute, old, new, kwargs):
         if new == "on" and old == "off" and not self.backup_timer:
@@ -157,12 +135,6 @@ class bathroom_fan_control(hass.Hass):
             self.cancel_timer(self.timer_handle)
             self.timer_handle = None
         self.turn_off(self.fan)
-    
-    def motion_timer_callback(self, kwargs):
-        self.motion_timer_handle = None
-        self.halog("Motion timer triggered, starting fan shutdown timer")
-        self.restart_normal()
-        self.cancel_backup()
 
     def hum_trigger(self):
         fanstate = self.get_state(self.fan)
@@ -193,15 +165,6 @@ class bathroom_fan_control(hass.Hass):
         if self.timer_handle:
             self.cancel_timer(self.timer_handle)
             self.timer_handle = None
-    
-    def restart_motion(self):
-        if self.motion_timer_handle:
-            self.cancel_timer(self.motion_timer_handle)
-        self.motion_timer_handle = self.run_in(self.motion_timer_callback, 600) # 10 Minutes no motion, trigger fan timer
-    
-    def cancel_motion(self):
-        if self.motion_timer_handle:
-            self.cancel_timer(self.motion_timer_handle)
 
     def halog(self, msg):
         # Hacky method to get logs from AD into HA
