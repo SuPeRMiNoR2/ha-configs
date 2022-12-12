@@ -123,6 +123,7 @@ class Battery(hass.Hass):
                 message = message + device + " " + str(values[device]) + "\n"
 
             self.log("Low Battery Report: "+message)
+            self.log("Sending battery report to: notify."+self.notifier)
             self.notify(message, title="Low Battery Report", name=self.notifier)
             if invalid:
                 self.log("Invalid/Ignored devices: {0}".format(invalid))
