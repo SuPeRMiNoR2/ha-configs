@@ -1,7 +1,7 @@
 import hassapi as hass
 import datetime
 
-__version__ = "2022-09-23"
+__version__ = "2022-12-25"
 
 # Source: 
 #
@@ -95,6 +95,16 @@ class ASM(hass.Hass):
                         self.leak_sensors[device] = details
                         self.debuglog("Added Leak Sensor {1}".format(details["friendly_name"], device))
                         self.monitored_devices.insert(0, details["friendly_name"])
+                    if devices[device]["attributes"]["device_class"] == "smoke" and not device in self.ignored_sensors:
+                        details = {"entity_id": device, "friendly_name": devices[device]["attributes"]["friendly_name"]}
+                        self.debuglog("Found Smoke Alarm {1}".format(details["friendly_name"], device))
+                        self.monitored_devices.insert(0, details["friendly_name"])
+                        self.listen_state(self.smoke_callback, entity_id=device)
+                    if devices[device]["attributes"]["device_class"] == "carbon_monoxide" and not device in self.ignored_sensors:
+                        details = {"entity_id": device, "friendly_name": devices[device]["attributes"]["friendly_name"]}
+                        self.debuglog("Found Carbon Monoxide Alarm {1}".format(details["friendly_name"], device))
+                        self.monitored_devices.insert(0, details["friendly_name"])
+                        self.listen_state(self.co_callback, entity_id=device)
 
         for door in self.door_sensors:
             self.listen_state(self.door_callback, entity_id=door, new="on")
@@ -110,6 +120,28 @@ class ASM(hass.Hass):
         # Init Arm and Alarm States
         self.update_alarm_state("off")
         self.update_arm_state(self.get_state(self.arm_target_entity)) # Set arm state to what the arm target state currently is
+
+    #
+    # Event Callback Handlers
+    #
+
+    def smoke_callback(self, entity, attribute, old, new, kwargs):
+        friendly_name = self.get_state(entity, attribute="friendly_name")
+        if new == "on":
+            msg = "Triggered: {0}".format(friendly_name)
+            self.send_notification(msg, type="Smoke Alarm")
+        if old == "on" and new == "off":
+            msg = "Cleared: {0}".format(friendly_name)
+            self.send_notification(msg, type="Smoke Alarm")
+
+    def co_callback(self, entity, attribute, old, new, kwargs):
+        friendly_name = self.get_state(entity, attribute="friendly_name")
+        if new == "on":
+            msg = "Triggered: {0}".format(friendly_name)
+            self.send_notification(msg, type="Carbon Monoxide Alarm")
+        if old == "on" and new == "off":
+            msg = "Cleared: {0}".format(friendly_name)
+            self.send_notification(msg, type="Carbon Monoxide Alarm")
 
     def leak_callback(self, entity, attribute, old, new, kwargs):
         friendly_name = self.leak_sensors[entity]["friendly_name"]
