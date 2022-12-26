@@ -126,21 +126,21 @@ class ASM(hass.Hass):
     #
 
     def smoke_callback(self, entity, attribute, old, new, kwargs):
-        friendly_name = self.get_state(entity, attribute="friendly_name")
+        friendly_name = self.get_state(entity, attribute="friendly_name", default=entity)
         if new == "on":
-            msg = "Triggered: {0}".format(friendly_name)
+            msg = "Smoke Detected on: {0}".format(friendly_name)
             self.send_notification(msg, type="Smoke Alarm")
         if old == "on" and new == "off":
-            msg = "Cleared: {0}".format(friendly_name)
+            msg = "Smoke Cleared on: {0}".format(friendly_name)
             self.send_notification(msg, type="Smoke Alarm")
 
     def co_callback(self, entity, attribute, old, new, kwargs):
-        friendly_name = self.get_state(entity, attribute="friendly_name")
+        friendly_name = self.get_state(entity, attribute="friendly_name", default=entity)
         if new == "on":
-            msg = "Triggered: {0}".format(friendly_name)
+            msg = "CO Detected on: {0}".format(friendly_name)
             self.send_notification(msg, type="Carbon Monoxide Alarm")
         if old == "on" and new == "off":
-            msg = "Cleared: {0}".format(friendly_name)
+            msg = "CO Cleared on: {0}".format(friendly_name)
             self.send_notification(msg, type="Carbon Monoxide Alarm")
 
     def leak_callback(self, entity, attribute, old, new, kwargs):
