@@ -2,7 +2,6 @@
 
 These are the scripts that I use that I think are good enough / portable enough to share.
 
-
 ## motion_lights.py
 This script handles turning lights on and off based on motion or other activity in a variety of ways.
 
