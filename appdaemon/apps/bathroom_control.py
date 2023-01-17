@@ -94,16 +94,15 @@ class bathroom_fan_control(hass.Hass):
         self.hum_readings.append(reading) # Add reading to deque
 
     def light_callback(self, entity, attribute, old, new, kwargs):
+        self.log(self.get_state(self.fan))
         if self.get_state(self.fan) == "on": # Only do anything if the fan is actually on
 
             if old == "on" and new == "off":
-                # The light shut off, restart normal timer and cancel backup timer if the timer isn't already started (From motion trigger)
-                # Since the light may be motion controlled, if we restart the timer now we may be extending the fan longer than needed
-                # If the timer isn't started, this was probably someone turning off the light manually. So we can start the timer now
-                if not self.timer_handle:
-                    self.cancel_backup()
-                    self.restart_normal()
-                    self.halog("Detected light shutdown, starting fan timer")
+                # The light shut off, restart normal timer and cancel backup timer
+                self.halog("Detected light shutdown, starting fan timer")
+                self.cancel_backup()
+                self.restart_normal()
+                
     
             if old == "off" and new == "on":
                 # The light switch just went on, cancel all timers so that nothing weird happens to the person who just entered
