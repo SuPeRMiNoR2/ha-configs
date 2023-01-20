@@ -43,8 +43,8 @@ class Battery(hass.Hass):
         if "runtime" in self.args:
             self.time = self.args["runtime"]
         else:
-            time = "18:00:00" # Default to 6 PM
-        self.run_daily(self.check_batteries, time)
+            self.time = "18:00:00" # Default to 6 PM
+        self.run_daily(self.check_batteries, self.time)
 
         self.excluded = []
         if "excluded" in self.args:
